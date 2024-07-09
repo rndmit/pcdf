@@ -14,8 +14,8 @@ from pcdf.lib.datamodel import (
 
 
 class Datamodel(BaseDatamodel):
-    #image: ImageConfigModel
-    #network: NetworkingConfigModel
+    image: ImageConfigModel
+    network: NetworkingConfigModel
     envs: list[EnvVarModel] = []
 
 

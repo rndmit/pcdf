@@ -49,7 +49,6 @@ def check_datamodel_conformance(cls: FqNamedEntity, input: BaseModel):
 
     if not isinstance(input, datamodel):
         dmvars = vars(datamodel)
-
         raise ProtocolConformanceError(
             cls.fqname(),
             [
