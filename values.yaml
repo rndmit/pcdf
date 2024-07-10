@@ -1,0 +1,16 @@
+# yaml-language-server: $schema=values.schema.json
+metadata:
+  name: test-service
+  namespace: testns
+  project: progressive-project
+
+runtime:
+  image: nginx
+  tag: latest
+  container_name: app
+  replicas: 1
+
+network:
+  ports:
+    - name: http
+      number: 8000

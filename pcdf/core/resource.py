@@ -7,6 +7,7 @@ from typing import Any, Self, Protocol
 
 from pydantic import BaseModel
 
+from pcdf.core.context import Context
 
 class ExecutionStage(Enum):
     PRE_HOOK = "pre_hook"
@@ -48,27 +49,28 @@ class ProviderExecutionError(Exception):
 class AbstractResourceProvider(ABC):
     """Base class for ResourceProviders"""
 
-    mutators: list[AbstractResourceMutator] = []
+    mutators: list[AbstractResourceMutator]
 
     @classmethod
     def fqname(cls) -> str:
         return f"{cls.__module__}.{cls.__qualname__}"
 
     def with_mutators(self, *mutators: AbstractResourceMutator) -> Self:
+        self.mutators = []
         for m in mutators:
             self.mutators.append(m)
         return self
 
     @abstractmethod
-    def execute(self, log: Logger, data: Any) -> Sequence[Resource]:  # pragma: no cover
+    def execute(self, log: Logger, ctx: Context, data: Any) -> Sequence[Resource]:  # pragma: no cover
         """main stage of Provider execution"""
         ...
 
-    def pre_hook(self, log: Logger):  # pragma: no cover
+    def pre_hook(self, log: Logger, ctx: Context):  # pragma: no cover
         """pre_hook executed before main stage"""
         return
 
-    def post_hook(self, log: Logger):  # pragma: no cover
+    def post_hook(self, log: Logger, ctx: Context):  # pragma: no cover
         """post_hook executed after main stage"""
         return
 

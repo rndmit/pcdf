@@ -1,0 +1,1 @@
+from pcdf.cmd.render import render

@@ -1,22 +1,24 @@
-from typing import Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable, Literal
 from pydantic import BaseModel
 
 
-class MetadataModel(BaseModel):
+class Metadata(BaseModel):
     name: str
     namespace: str
+    project: str
+    type: Literal["service"] = "service"
 
 
-class BaseDatamodel(BaseModel):
-    metadata: MetadataModel
+class Base(BaseModel):
+    metadata: Metadata
 
 
-class ImageModel(BaseModel):
+class Image(BaseModel):
     repository: str
     tag: str
 
 
-class RuntimeModel(BaseModel):
+class Runtime(BaseModel):
     image: str
     tag: str
     container_name: str = "app"
@@ -25,15 +27,15 @@ class RuntimeModel(BaseModel):
     replicas: int = 1
 
 
-class PortModel(BaseModel):
+class Port(BaseModel):
     name: str
     number: int
 
 
-class EnvVarModel(BaseModel):
+class EnvVar(BaseModel):
     name: str
     value: str
 
 
-class NetworkingModel(BaseModel):
-    ports: list[PortModel] = []
+class Networking(BaseModel):
+    ports: list[Port] = []
