@@ -7,18 +7,31 @@ from .resource import (
     Resource,
     AbstractResourceProvider,
     AbstractResourceMutator,
-    ResourceFactory,
-    ResourceFactoryConfig,
     ExecutionStage,
     ProviderExecutionError,
+    check_datamodel_conformance,
+    ProtocolConformanceError,
+    UndefinedDatamodelError,
 )
 
+from .factory import (
+    ResourceFactory,
+    ResourceFactoryConfig,
+)
+
+from .config import Config, validate_config
+
 __all__ = [
+    "Config",
     "Resource",
+    "ProtocolConformanceError",
+    "UndefinedDatamodelError",
     "AbstractResourceProvider",
     "AbstractResourceMutator",
     "ResourceFactory",
     "ResourceFactoryConfig",
     "ExecutionStage",
     "ProviderExecutionError",
+    "check_datamodel_conformance",
+    "validate_config",
 ]

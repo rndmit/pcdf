@@ -1,46 +1,56 @@
-import logging
-from dataclasses import dataclass
-
-from pcdf.core import AbstractResourceProvider, AbstractResourceMutator
-from pcdf.core.config import ResourceCfg, check_protocols
-from pcdf.lib.deployment import DeploymentProvider, DeploymentEnvMutator
+from pcdf.core import Config
+from pcdf.cmd.render import render
+from pcdf.lib.deployment import (
+    DeploymentProvider,
+    DeploymentEnvMutator,
+    DeploymentRuntimeMutator,
+    DeploymentDefaultContainerAnnotationMutator,
+)
 from pcdf.lib.datamodel import (
     BaseDatamodel,
-    ImageConfigModel,
-    NetworkingConfigModel,
+    NetworkingModel,
     EnvVarModel,
+    MetadataModel,
+    RuntimeModel,
     PortModel,
 )
 
 
 class Datamodel(BaseDatamodel):
-    image: ImageConfigModel
-    network: NetworkingConfigModel
+    runtime: RuntimeModel
+    network: NetworkingModel
     envs: list[EnvVarModel] = []
 
 
-cfg = [ResourceCfg(provider=DeploymentProvider, mutators=[DeploymentEnvMutator])]
+cfg = Config(
+    debug=False,
+    resources=[
+        Config.Resource(
+            provider=DeploymentProvider,
+            mutators=[
+                DeploymentEnvMutator,
+                DeploymentRuntimeMutator,
+                DeploymentDefaultContainerAnnotationMutator,
+            ],
+        )
+    ],
+)
 
+dm = Datamodel(
+    metadata=MetadataModel(name="test-app", namespace="test"),
+    runtime=RuntimeModel(
+        image="nginx",
+        tag="alpine",
+        entrypoint=["/bin/bash"],
+        command=["tail -f /dev/null"],
+    ),
+    network=NetworkingModel(ports=[PortModel(name="http", number=8888)]),
+    envs=[EnvVarModel(name="DEBUG", value="True")],
+)
 
 
 def main():
-    log = logging.getLogger()
-
-    dm = Datamodel(
-        name="test-app",
-        namespace="test",
-        image=ImageConfigModel(repository="nginx", tag="latest"),
-        network=NetworkingConfigModel(ports=[PortModel(name="http", number=8888)]),
-        envs=[EnvVarModel(name="DEBUG", value="True")],
-    )
-
-    check_protocols(cfg, dm)
-
-    
-
-    # r = DeploymentProvider().with_mutators(DeploymentEnvMutator()).execute(log, dm)
-    # for res in r:
-    #     print(res.model)
+    render(dm, cfg)
 
 
 main()
