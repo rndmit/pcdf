@@ -1,0 +1,37 @@
+# yaml-language-server: $schema=values.schema.json
+metadata:
+  name: test-service
+  namespace: testns
+  project: progressive-project
+
+runtime:
+  image: nginx
+  tag: latest
+  containerName: app
+  replicas: 1
+
+network:
+  ports:
+    - name: http
+      number: 8000
+    - name: grpc
+      number: 50051
+  publicate:
+    - host: test.progressive-cd.io
+  ingressAnnotations: {}
+
+certmanager:
+  annotations:
+    cert-manager.io/common-name: test.progressive-cd.io
+
+filesMountPath: /opt/app
+files:
+  - name: config.yaml
+    content: |
+      loglevel: debug
+      http:
+        port: 8000
+        host: 0.0.0.0
+  - name: rds_ca.pem
+    content: |
+      somemultilinecertificate
