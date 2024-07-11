@@ -1,0 +1,150 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    kubectl.kubernetes.io/default-container: app
+  labels:
+    app.kubernetes.io/component: service
+    app.kubernetes.io/instance: test-service@testns
+    app.kubernetes.io/managed-by: progressive-cd
+    app.kubernetes.io/name: test-service
+    app.kubernetes.io/part-of: progressive-project
+    app.kubernetes.io/version: latest
+    progressive-cd.io/last-run-id: 2j78mM3ejfaUmjO6lXafxEu8BSM
+    progressive-cd.io/version: 0.0.0t-0.1.0f
+  name: test-service
+  namespace: testns
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: service
+      app.kubernetes.io/instance: test-service@testns
+      app.kubernetes.io/managed-by: progressive-cd
+      app.kubernetes.io/name: test-service
+      app.kubernetes.io/part-of: progressive-project
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: service
+        app.kubernetes.io/instance: test-service@testns
+        app.kubernetes.io/managed-by: progressive-cd
+        app.kubernetes.io/name: test-service
+        app.kubernetes.io/part-of: progressive-project
+    spec:
+      containers:
+      - env: []
+        image: nginx:latest
+        name: app
+        ports:
+        - containerPort: 8000
+          name: http
+        - containerPort: 50051
+          name: grpc
+        resources:
+          limits:
+            cpu: 20m
+            memory: 20Mi
+          requests:
+            cpu: 20m
+            memory: 20Mi
+        volumeMounts:
+        - mountPath: /opt/app
+          name: mounted-config
+      volumes:
+      - configMap:
+          items:
+          - key: config.yaml
+            path: config.yaml
+          - key: rds_ca.pem
+            path: rds_ca.pem
+          name: test-service
+        name: mounted-config
+---
+apiVersion: core/v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/component: service
+    app.kubernetes.io/instance: test-service@testns
+    app.kubernetes.io/managed-by: progressive-cd
+    app.kubernetes.io/name: test-service
+    app.kubernetes.io/part-of: progressive-project
+    progressive-cd.io/last-run-id: 2j78mM3ejfaUmjO6lXafxEu8BSM
+    progressive-cd.io/version: 0.0.0t-0.1.0f
+  name: test-service
+  namespace: testns
+spec:
+  ports:
+  - name: http
+    port: 8000
+    protocol: TCP
+  - name: grpc
+    port: 50051
+    protocol: TCP
+  selector:
+    app.kubernetes.io/component: service
+    app.kubernetes.io/instance: test-service@testns
+    app.kubernetes.io/managed-by: progressive-cd
+    app.kubernetes.io/name: test-service
+    app.kubernetes.io/part-of: progressive-project
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    cert-manager.io/cluster-issuer: cluster-issuer
+    cert-manager.io/common-name: test.progressive-cd.io
+  labels:
+    app.kubernetes.io/component: service
+    app.kubernetes.io/instance: test-service@testns
+    app.kubernetes.io/managed-by: progressive-cd
+    app.kubernetes.io/name: test-service
+    app.kubernetes.io/part-of: progressive-project
+    progressive-cd.io/last-run-id: 2j78mM3ejfaUmjO6lXafxEu8BSM
+    progressive-cd.io/version: 0.0.0t-0.1.0f
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: test.progressive-cd.io
+    http:
+      paths:
+      - backend:
+          service:
+            name: test-service
+            port:
+              name: http
+        path: /
+        pathType: ImplementationSpecific
+  tls:
+  - hosts:
+    - test.progressive-cd.io
+    secretName: test-service-ingress-tls
+---
+apiVersion: core/v1
+data:
+  config.yaml: "loglevel: debug\nhttp:\n  port: 8000\n  host: 0.0.0.0\n"
+  rds_ca.pem: 'somemultilinecertificate
+
+    '
+kind: ConfigMap
+metadata:
+  labels:
+    app.kubernetes.io/component: service
+    app.kubernetes.io/instance: test-service@testns
+    app.kubernetes.io/managed-by: progressive-cd
+    app.kubernetes.io/name: test-service
+    app.kubernetes.io/part-of: progressive-project
+    progressive-cd.io/last-run-id: 2j78mM3ejfaUmjO6lXafxEu8BSM
+    progressive-cd.io/version: 0.0.0t-0.1.0f
+  name: test-service
+  namespace: testns
+---
+apiVersion: core/v1
+kind: Job
+metadata:
+  name: test-service
+  namespace: testns
+stringData:
+  somesecretvariable: oh it's very secret
