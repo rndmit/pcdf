@@ -1,16 +1,15 @@
 from collections.abc import Sequence
 from logging import Logger
 from typing import Self
-from ksuid import Ksuid
 
-from pcdf.core.settings import Settings
+from pcdf.core.context import Context, RunContext, RunInfo, SystemInfo
 from pcdf.core.resource import (
     AbstractResourceProvider,
-    Resource,
     ExecutionStage,
     ProviderExecutionError,
+    Resource,
 )
-from pcdf.core.context import Context, SystemInfo, RunInfo
+from pcdf.core.settings import Settings
 
 
 class ResourceFactory[T]:
@@ -26,7 +25,7 @@ class ResourceFactory[T]:
 
     def __init__(self, logger: Logger, si: SystemInfo):
         self.logger = logger
-        self.root_ctx = Context(si)
+        self.root_ctx = Context(si, values={})
         self.providers = {}
         self.resources = []
 
@@ -45,13 +44,13 @@ class ResourceFactory[T]:
         return self
 
     def run(self, data: T) -> Sequence[Resource]:
-        ctx = self.root_ctx.with_run_info(RunInfo(id=Ksuid().__str__()))
+        ctx = self.root_ctx.with_run_info(RunInfo())
         for pname in self.providers.keys():
             self.logger.debug(f"executing {pname}")
             self._execute_provider(ctx, pname, data)
         return self.resources
 
-    def _execute_provider(self, ctx: Context, pname: str, data: T):
+    def _execute_provider(self, ctx: RunContext, pname: str, data: T):
         ctx = ctx.with_values({"pname": pname})
         provider = self.providers[pname]
         plog = self.logger.getChild(pname)

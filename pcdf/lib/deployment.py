@@ -3,26 +3,31 @@ from dataclasses import dataclass
 from logging import Logger
 from typing import Protocol, runtime_checkable
 
-from pcdf.core import (
-    AbstractResourceProvider,
-    AbstractResourceMutator,
-    Resource,
-    Context,
-)
-
-from pcdf import Settings
-from pcdf.lib.exceptions import IncorrectManifestError, IncorrectRunContextErrorMsg
-from pcdf.lib import datamodel, utils
-
 from kubemodels.io.k8s.api.apps.v1 import Deployment, DeploymentSpec
 from kubemodels.io.k8s.api.core.v1 import (
-    PodTemplateSpec,
-    PodSpec,
+    ConfigMapVolumeSource,
+    ResourceRequirements,
     Container,
-    EnvVar,
     ContainerPort,
+    EnvVar,
+    KeyToPath,
+    PodSpec,
+    PodTemplateSpec,
+    Volume,
+    VolumeMount,
 )
-from kubemodels.io.k8s.apimachinery.pkg.apis.meta.v1 import ObjectMeta, LabelSelector
+from kubemodels.io.k8s.apimachinery.pkg.apis.meta.v1 import LabelSelector, ObjectMeta
+from kubemodels.io.k8s.apimachinery.pkg.api.resource import Quantity
+
+from pcdf import Settings
+from pcdf.core import (
+    AbstractResourceMutator,
+    AbstractResourceProvider,
+    Resource,
+    RunContext,
+)
+from pcdf.lib import datamodel, utils
+from pcdf.lib.exceptions import IncorrectManifestError
 
 
 @dataclass
@@ -32,6 +37,13 @@ class MainContainersMiscountError(Exception):
 
     def __str__(self) -> str:
         return f" has {self.count} container named '{self.mc_name}'. Expected only 1"
+
+
+def app_container(containers: list[Container], runtime_cfg: datamodel.Runtime):
+    ct = [c for c in containers if c.name == runtime_cfg.containerName]
+    if (ctlen := len(ct)) != 1:
+        raise MainContainersMiscountError(runtime_cfg.containerName, ctlen)
+    return ct[0]
 
 
 class EnvMutator(AbstractResourceMutator):
@@ -62,19 +74,35 @@ class RuntimeMutator(AbstractResourceMutator):
         if (spec := resource.model.spec) is None or spec.template.spec is None:
             raise IncorrectManifestError(self.__qualname__)
 
-        ct = [
-            c
-            for c in spec.template.spec.containers
-            if c.name == data.runtime.container_name
-        ]
-        if (ctlen := len(ct)) != 1:
-            raise MainContainersMiscountError(data.runtime.container_name, ctlen)
-
-        ct[0].image = f"{data.runtime.image}:{data.runtime.tag}"
-        ct[0].command = data.runtime.entrypoint
-        ct[0].args = data.runtime.command
+        ct = app_container(spec.template.spec.containers, data.runtime)
+        ct.image = f"{data.runtime.image}:{data.runtime.tag}"
+        ct.command = data.runtime.entrypoint
+        ct.args = data.runtime.command
 
         spec.replicas = data.runtime.replicas
+
+
+class ResourcesMutator(AbstractResourceMutator):
+    @runtime_checkable
+    class Datamodel(Protocol):
+        runtime: datamodel.Runtime
+        resources: datamodel.Resources
+
+    def execute(self, log: Logger, data: Datamodel, resource: Resource[Deployment]):
+        if (spec := resource.model.spec) is None or spec.template.spec is None:
+            raise IncorrectManifestError(self.__qualname__)
+
+        ct = app_container(spec.template.spec.containers, data.runtime)
+        ct.resources = ResourceRequirements(
+            limits={
+                "cpu": Quantity(data.resources.limits.cpu),
+                "memory": Quantity(data.resources.limits.memory),
+            },
+            requests={
+                "cpu": Quantity(data.resources.requests.cpu),
+                "memory": Quantity(data.resources.requests.memory),
+            },
+        )
 
 
 class ContainerPortMutator(AbstractResourceMutator):
@@ -87,15 +115,8 @@ class ContainerPortMutator(AbstractResourceMutator):
         if (spec := resource.model.spec) is None or spec.template.spec is None:
             raise IncorrectManifestError(self.__qualname__)
 
-        ct = [
-            c
-            for c in spec.template.spec.containers
-            if c.name == data.runtime.container_name
-        ]
-        if (ctlen := len(ct)) != 1:
-            raise MainContainersMiscountError(data.runtime.container_name, ctlen)
-
-        ct[0].ports = [
+        ct = app_container(spec.template.spec.containers, data.runtime)
+        ct.ports = [
             ContainerPort(name=p.name, containerPort=p.number)
             for p in data.network.ports
         ]
@@ -111,8 +132,42 @@ class DefaultContainerAnnotationMutator(AbstractResourceMutator):
             raise IncorrectManifestError(self.__qualname__)
 
         meta.annotations["kubectl.kubernetes.io/default-container"] = (
-            data.runtime.container_name
+            data.runtime.containerName
         )
+
+
+class ConfigmapMountMutator(AbstractResourceMutator):
+    @runtime_checkable
+    class Datamodel(Protocol):
+        metadata: datamodel.Metadata
+        files: list[datamodel.Document]
+        runtime: datamodel.Runtime
+        filesMountPath: str
+
+    def execute(self, log: Logger, data: Datamodel, resource: Resource[Deployment]):
+        if (spec := resource.model.spec) is None or spec.template.spec is None:
+            raise IncorrectManifestError(self.__qualname__)
+
+        if len(data.files) < 1:
+            return
+
+        tplspec = spec.template.spec
+        if tplspec.volumes is None:
+            tplspec.volumes = []
+        tplspec.volumes.append(
+            Volume(
+                name="mounted-config",
+                configMap=ConfigMapVolumeSource(
+                    name=data.metadata.name,
+                    items=[KeyToPath(key=f.name, path=f.name) for f in data.files],
+                ),
+            )
+        )
+
+        ct = app_container(spec.template.spec.containers, data.runtime)
+        ct.volumeMounts = [
+            VolumeMount(mountPath=data.filesMountPath, name="mounted-config")
+        ]
 
 
 class Provider(AbstractResourceProvider):
@@ -121,9 +176,9 @@ class Provider(AbstractResourceProvider):
         metadata: datamodel.Metadata
         runtime: datamodel.Runtime
 
-    def execute(self, log: Logger, ctx: Context, data: Datamodel) -> Sequence[Resource]:
-        assert ctx.run is not None, IncorrectRunContextErrorMsg
-        
+    def execute(
+        self, log: Logger, ctx: RunContext, data: Datamodel
+    ) -> Sequence[Resource]:
         default_labels = utils.default_labels(data.metadata)
         res = Resource(
             Deployment(
@@ -132,9 +187,10 @@ class Provider(AbstractResourceProvider):
                 metadata=ObjectMeta(
                     name=data.metadata.name,
                     namespace=data.metadata.namespace,
-                    labels=default_labels | ctx.system.labels() | ctx.run.labels()
-                    if ctx.run is not None
-                    else {},
+                    labels=default_labels
+                    | {"app.kubernetes.io/version": data.runtime.tag}
+                    | ctx.system.labels()
+                    | ctx.run.labels(),
                     annotations={},
                 ),
                 spec=DeploymentSpec(
@@ -144,7 +200,7 @@ class Provider(AbstractResourceProvider):
                         spec=PodSpec(
                             containers=[
                                 Container(
-                                    name=data.runtime.container_name,
+                                    name=data.runtime.containerName,
                                 )
                             ]
                         ),
@@ -165,6 +221,7 @@ DEFAULT_CONFIG = Settings.Resource(
         EnvMutator,
         ContainerPortMutator,
         RuntimeMutator,
+        ConfigmapMountMutator,
         DefaultContainerAnnotationMutator,
     ],
 )

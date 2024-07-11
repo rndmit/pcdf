@@ -1,12 +1,9 @@
 from collections.abc import Sequence
-
 from logging import Logger
-from typing import Protocol, runtime_checkable
+from typing import  Protocol, runtime_checkable
 
 from kubemodels.io.k8s.api.core.v1 import (
-    Service,
-    ServicePort,
-    ServiceSpec,
+    ConfigMap,
 )
 from kubemodels.io.k8s.apimachinery.pkg.apis.meta.v1 import ObjectMeta
 
@@ -23,29 +20,22 @@ class Provider(AbstractResourceProvider):
     @runtime_checkable
     class Datamodel(Protocol):
         metadata: datamodel.Metadata
-        network: datamodel.Networking
+        files: list[datamodel.Document]
 
     def execute(
         self, log: Logger, ctx: RunContext, data: Datamodel
     ) -> Sequence[Resource]:
         default_labels = utils.default_labels(data.metadata)
         res = Resource(
-            Service(
+            ConfigMap(
                 apiVersion="core/v1",
-                kind="Service",
+                kind="ConfigMap",
                 metadata=ObjectMeta(
                     name=data.metadata.name,
                     namespace=data.metadata.namespace,
                     labels=default_labels | ctx.system.labels() | ctx.run.labels(),
                 ),
-                spec=ServiceSpec(
-                    selector=default_labels,
-                    ports=[
-                        ServicePort(name=p.name, port=p.number, protocol=p.protocol)
-                        for p in data.network.ports
-                    ],
-                    type=data.network.serviceType,
-                ),
+                data={f.name: f.content for f in data.files},
             )
         )
 

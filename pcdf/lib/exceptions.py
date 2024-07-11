@@ -7,5 +7,3 @@ class IncorrectManifestError(Exception):
 
     def __str__(self) -> str:
         return f"{self.entname} exited because given Deployment manifest is not correct"
-
-IncorrectRunContextErrorMsg = "Given context doesn't contain RunInfo"

@@ -1,5 +1,6 @@
-from typing import Self
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+
+from ksuid import Ksuid
 
 
 @dataclass(frozen=True)
@@ -9,29 +10,25 @@ class SystemInfo:
 
     def labels(self) -> dict[str, str]:
         return {
-            "progressive-cd.io/tool-version": self.version,
-            "progressive-cd.io/framework-version": self.framework_version,
+            "progressive-cd.io/version": f"{self.version}t-{self.framework_version}f",
         }
 
 
 @dataclass(frozen=True)
 class RunInfo:
-    id: str
+    id: str = Ksuid().__str__()
 
     def labels(self) -> dict[str, str]:
         return {"progressive-cd.io/last-run-id": self.id}
 
-
-@dataclass(frozen=True)
-class Context:
+@dataclass
+class Context():
     system: SystemInfo
-    run: RunInfo | None = None
-    values: dict[str, str] = field(default_factory=dict)
+    values: dict[str, str]
 
     def with_values(self, values: dict[str, str]) -> "Context":
         return Context(
             system=self.system,
-            run=self.run,
             values=self.values | values,
         )
 
@@ -42,7 +39,13 @@ class Context:
             values=self.values,
         )
 
-
-@dataclass(frozen=True)
+@dataclass
 class RunContext(Context):
-    run: RunInfo = RunInfo(id="")
+    run: RunInfo
+
+    def with_values(self, values: dict[str, str]) -> "RunContext":
+        return RunContext(
+            system=self.system,
+            run=self.run,
+            values=self.values | values,
+        )

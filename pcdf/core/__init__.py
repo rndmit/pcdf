@@ -3,7 +3,7 @@ Core library for PCDF. It's useful for writing your own framework entities.
 Also PCDF provides some ready entities. You could find them in package pcdf.lib.
 """
 
-from .settings import Settings, validate_config
+from .context import Context, RunContext, RunInfo, SystemInfo
 from .factory import ResourceFactory
 from .resource import (
     AbstractResourceMutator,
@@ -15,7 +15,7 @@ from .resource import (
     UndefinedDatamodelError,
     check_datamodel_conformance,
 )
-from .context import Context, SystemInfo
+from .settings import Settings, validate_config
 
 __all__ = [
     "Settings",
@@ -30,5 +30,3 @@ __all__ = [
     "check_datamodel_conformance",
     "validate_config",
 ]
-
-

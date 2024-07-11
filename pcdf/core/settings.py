@@ -1,12 +1,14 @@
-import sys
 from importlib.metadata import version as pkg_version
-from pydantic import BaseModel, Field
+from typing import Self
+
+from pydantic import BaseModel
+
+from pcdf.core.context import SystemInfo
 from pcdf.core.resource import (
-    AbstractResourceProvider,
     AbstractResourceMutator,
+    AbstractResourceProvider,
     check_datamodel_conformance,
 )
-from pcdf.core.context import SystemInfo
 
 
 class Settings(BaseModel):
@@ -14,17 +16,18 @@ class Settings(BaseModel):
         provider: type[AbstractResourceProvider]
         mutators: list[type[AbstractResourceMutator]]
 
+        def with_mutators(self, *mutators: type[AbstractResourceMutator]) -> Self:
+            self.mutators += list(mutators)
+            return self
+
     resources: list[Resource]
-    debug: bool = Field(default=False, description="Turns debug mode on/off")
     version: str
     framework_version: str = pkg_version("pcdf")
 
     def get_system_info(self) -> SystemInfo:
         return SystemInfo(
-            version=self.version,
-            framework_version=self.framework_version
+            version=self.version, framework_version=self.framework_version
         )
-
 
 
 def validate_config(cfg: list[Settings.Resource], input: BaseModel):

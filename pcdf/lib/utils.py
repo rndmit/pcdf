@@ -1,4 +1,4 @@
-from .datamodel import Metadata
+from pcdf.lib.datamodel import Metadata
 
 
 def default_labels(metadata: Metadata) -> dict[str, str]:

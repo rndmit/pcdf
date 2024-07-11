@@ -1,23 +1,38 @@
-import logging
+import sys
+from typing import Annotated, cast
 
-from pydantic import BaseModel
+import typer
+import yaml
 
-from pcdf.core import Settings, ProtocolConformanceError, ResourceFactory, validate_config
+from pcdf.cmd.context import CommandContext
+from pcdf.cmd.datamodel import validate
+from pcdf.core import (
+    ResourceFactory,
+)
 
 
-def render(input: BaseModel, cfg: Settings):
-    log = logging.getLogger()
-    log.setLevel(logging.DEBUG)
+def render(
+    ctx: CommandContext,
+    values: str,
+    output: str = "",
+):
+    log = ctx["logger"]
+    settings = ctx["settings"]
+    with open(values, "r") as file:
+        vals = ctx["datamodel"](**yaml.safe_load(file))
 
+    validate(ctx, values, show_success_msg=False)
+
+    log.debug("launching resource factory")
     try:
-        validate_config(cfg.resources, input)
-    except ProtocolConformanceError as err:
-        sep = "\n - "
-        log.fatal(
-            f"Given datamodel does not conform {err.protocol} protocol. Missing fields: {sep + sep.join(err.unconformed)}"
-        )
-        exit(1)
+        result = ResourceFactory.from_config(log, settings).run(vals)
+    except Exception as err:
+        log.error(err)
+        return
 
-    r = ResourceFactory.from_config(log, cfg).run(input)
-    for res in r:
-        print(res.dump(),"\n---\n")
+    dumped = [res.dump() for res in result]
+    if output == "":
+        yaml.dump_all(dumped, sys.stdout)
+    else:
+        with open(output, "w") as file:
+            yaml.dump_all(dumped, file)
